@@ -15,6 +15,7 @@ data LispVal
   = Atom String
   | List [LispVal]
   | DottedList [LispVal] LispVal
+  | Vector [LispVal]
   | Number SchemeNumber
   | Character Char
   | Float Double
@@ -154,6 +155,13 @@ parseDottedList = do
   tl <- char '.' >> spaces >> parseExpr
   return $ DottedList hd tl
 
+parseVector :: Parser LispVal
+parseVector = do
+  _ <- string "#("
+  elems <- sepBy parseExpr spaces
+  _ <- char ')'
+  return $ Vector elems
+
 parseQuoted :: Parser LispVal
 parseQuoted = do
   _ <- char '\''
@@ -162,7 +170,8 @@ parseQuoted = do
 
 parseExpr :: Parser LispVal
 parseExpr =
-  try parseCharacter
+  try parseVector
+    <|> try parseCharacter
     <|> try parseString
     <|> try parseNumber
     <|> parseAtom
