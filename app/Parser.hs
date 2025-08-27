@@ -91,11 +91,16 @@ scanReal = do
   intPart <- many digit
   _ <- char '.'
   fracPart <- many digit
-  expPart <- option "" parseExponent
-  let wholePart = if null intPart then "0" else intPart
-      fracPartStr = if null fracPart then "0" else fracPart
-      numStr = wholePart ++ "." ++ fracPartStr ++ expPart
-  return $ read numStr
+  let valid = not (null intPart) || not (null fracPart)
+  if valid
+    then do
+      expPart <- option "" parseExponent
+      let wholePart = if null intPart then "0" else intPart
+          fracPartStr = if null fracPart then "0" else fracPart
+          numStr = wholePart ++ "." ++ fracPartStr ++ expPart
+      return $ read numStr
+    else
+      fail "Invalid real number"
   where
     parseExponent = do
       e <- oneOf "eE"
