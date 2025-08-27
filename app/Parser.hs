@@ -1,6 +1,7 @@
 module Parser where
 
-import Data.Complex
+import Data.Complex (Complex (..))
+import Data.Ratio
 import Numeric
 import Text.ParserCombinators.Parsec hiding (spaces)
 
@@ -57,10 +58,10 @@ parseAtom = do
     _ -> Atom atom
 
 parseNumber :: Parser LispVal
-parseNumber = parseDecimal <|> parseRadix
+parseNumber = try parseComplex <|> try parseRational <|> try parseReal <|> parseInteger <|> parseRadix
 
-parseDecimal :: Parser LispVal
-parseDecimal = do
+parseInteger :: Parser LispVal
+parseInteger = do
   digits <- many1 digit
   return $ Number $ Integer $ read digits
 
@@ -81,7 +82,53 @@ parseRadix = do
     'd' -> read digits
     _ -> -1
 
--- parseRealNumber :: Parser LispVal
+parseReal :: Parser LispVal
+parseReal = do
+  intPart <- many digit
+  _ <- char '.'
+  fracPart <- many digit
+  expPart <- option "" parseExponent
+  let wholePart = if null intPart then "0" else intPart
+      fracPartStr = if null fracPart then "0" else fracPart
+      numStr = wholePart ++ "." ++ fracPartStr ++ expPart
+  return $ Number $ Real $ read numStr
+  where
+    parseExponent = do
+      e <- oneOf "eE"
+      signChar <- option '+' (char '+' <|> char '-')
+      digits <- many1 digit
+      return $ e : signChar : digits
+
+parseRational :: Parser LispVal
+parseRational = do
+  sign <- option '+' (char '+' <|> char '-')
+  numeratorDigits <- many1 digit
+  _ <- char '/'
+  denominatorDigits <- many1 digit
+  let num = read $ if sign == '-' then '-' : numeratorDigits else numeratorDigits
+      denom = read denominatorDigits
+  return $ Number $ Rational (num % denom)
+
+parseComplex :: Parser LispVal
+parseComplex = try parseRectangular <|> parseImaginary
+  where
+    parseRectangular = do
+      realPart <- many1 digit
+      sign <- char '+' <|> char '-'
+      imagPart <- many digit
+      _ <- char 'i'
+      let real = read realPart
+          imag = if null imagPart then 1 else read imagPart
+          imagValue = if sign == '-' then -imag else imag
+      return $ Number $ Complex (real :+ imagValue)
+
+    parseImaginary = do
+      sign <- option '+' (char '+' <|> char '-')
+      imagPart <- many digit
+      _ <- char 'i'
+      let imag = if null imagPart then 1 else read imagPart
+          imagValue = if sign == '-' then -imag else imag
+      return $ Number $ Complex (0 :+ imagValue)
 
 parseCharacter :: Parser LispVal
 parseCharacter = do
@@ -99,7 +146,7 @@ parseCharacter = do
         _ -> fail $ "Unknown character literal: " ++ name
 
 parseExpr :: Parser LispVal
-parseExpr = parseNumber <|> parseAtom <|> parseString
+parseExpr = try parseCharacter <|> try parseString <|> try parseNumber <|> parseAtom
 
 readExpr :: String -> String
 readExpr input =
