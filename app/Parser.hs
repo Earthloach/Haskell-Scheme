@@ -83,7 +83,10 @@ parseRadix = do
     _ -> -1
 
 parseReal :: Parser LispVal
-parseReal = do
+parseReal = Number . Real <$> scanReal
+
+scanReal :: Parser Double
+scanReal = do
   intPart <- many digit
   _ <- char '.'
   fracPart <- many digit
@@ -91,7 +94,7 @@ parseReal = do
   let wholePart = if null intPart then "0" else intPart
       fracPartStr = if null fracPart then "0" else fracPart
       numStr = wholePart ++ "." ++ fracPartStr ++ expPart
-  return $ Number $ Real $ read numStr
+  return $ read numStr
   where
     parseExponent = do
       e <- oneOf "eE"
@@ -113,22 +116,19 @@ parseComplex :: Parser LispVal
 parseComplex = try parseRectangular <|> parseImaginary
   where
     parseRectangular = do
-      realPart <- many1 digit
+      realPart <- scanReal
       sign <- char '+' <|> char '-'
-      imagPart <- many digit
+      imagPart <- option 1.0 scanReal
       _ <- char 'i'
-      let real = read realPart
-          imag = if null imagPart then 1 else read imagPart
-          imagValue = if sign == '-' then -imag else imag
-      return $ Number $ Complex (real :+ imagValue)
+      let imagValue = if sign == '-' then -imagPart else imagPart
+      return $ Number $ Complex (realPart :+ imagValue)
 
     parseImaginary = do
       sign <- option '+' (char '+' <|> char '-')
-      imagPart <- many digit
+      imagPart <- option 1.0 scanReal
       _ <- char 'i'
-      let imag = if null imagPart then 1 else read imagPart
-          imagValue = if sign == '-' then -imag else imag
-      return $ Number $ Complex (0 :+ imagValue)
+      let imagValue = if sign == '-' then -imagPart else imagPart
+      return $ Number $ Complex (0.0 :+ imagValue)
 
 parseCharacter :: Parser LispVal
 parseCharacter = do
@@ -145,11 +145,36 @@ parseCharacter = do
         "tab" -> return '\t'
         _ -> fail $ "Unknown character literal: " ++ name
 
+parseList :: Parser LispVal
+parseList = List <$> sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList = do
+  hd <- endBy parseExpr spaces
+  tl <- char '.' >> spaces >> parseExpr
+  return $ DottedList hd tl
+
+parseQuoted :: Parser LispVal
+parseQuoted = do
+  _ <- char '\''
+  x <- parseExpr
+  return $ List [Atom "quote", x]
+
 parseExpr :: Parser LispVal
-parseExpr = try parseCharacter <|> try parseString <|> try parseNumber <|> parseAtom
+parseExpr =
+  try parseCharacter
+    <|> try parseString
+    <|> try parseNumber
+    <|> parseAtom
+    <|> parseQuoted
+    <|> do
+      _ <- char '('
+      x <- try parseList <|> parseDottedList
+      _ <- char ')'
+      return x
 
 readExpr :: String -> String
 readExpr input =
   case parse parseExpr "lisp" input of
     Left err -> "No match: " ++ show err
-    Right _ -> "Found value"
+    Right val -> "Found value: " ++ show val
