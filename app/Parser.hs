@@ -6,7 +6,7 @@ import Numeric
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 symbol :: Parser Char
-symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
+symbol = oneOf "$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
@@ -18,7 +18,6 @@ data LispVal
   | Vector [LispVal]
   | Number SchemeNumber
   | Character Char
-  | Float Double
   | String String
   | Bool Bool
   deriving (Show)
@@ -58,6 +57,7 @@ parseAtom = do
     "#f" -> Bool False
     _ -> Atom atom
 
+-- SchemeNumber parsers
 parseNumber :: Parser LispVal
 parseNumber = try parseComplex <|> try parseRational <|> try parseReal <|> parseInteger <|> parseRadix
 
@@ -136,6 +136,8 @@ parseComplex = try parseRectangular <|> parseImaginary
       let imagValue = if sign == '-' then -imagPart else imagPart
       return $ Number $ Complex (0.0 :+ imagValue)
 
+
+
 parseCharacter :: Parser LispVal
 parseCharacter = do
   _ <- string "#\\"
@@ -167,11 +169,33 @@ parseVector = do
   _ <- char ')'
   return $ Vector elems
 
+
+-- Quoted Lists parsers 
 parseQuoted :: Parser LispVal
 parseQuoted = do
   _ <- char '\''
   x <- parseExpr
   return $ List [Atom "quote", x]
+
+parseQuasiQuoted :: Parser LispVal
+parseQuasiQuoted = do
+  _ <- char '`'
+  x <- parseExpr
+  return $ List [Atom "quasiquote", x]
+
+parseUnQuote :: Parser LispVal
+parseUnQuote = do
+  _ <- char ','
+  x <- parseExpr
+  return $ List [Atom "unquote", x]
+
+parseUnQuoteSplicing :: Parser LispVal
+parseUnQuoteSplicing = do
+  _ <- char ','
+  _ <- char '@'
+  x <- parseExpr
+  return $ List [Atom "unquote-splicing", x]
+
 
 parseExpr :: Parser LispVal
 parseExpr =
@@ -181,6 +205,9 @@ parseExpr =
     <|> try parseNumber
     <|> parseAtom
     <|> parseQuoted
+    <|> parseQuasiQuoted
+    <|> parseUnQuote
+    <|> parseUnQuoteSplicing
     <|> do
       _ <- char '('
       x <- try parseList <|> parseDottedList
