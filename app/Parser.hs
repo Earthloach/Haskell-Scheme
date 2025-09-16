@@ -20,7 +20,6 @@ data LispVal
   | Character Char
   | String String
   | Bool Bool
-  deriving (Show)
 
 data SchemeNumber
   = Integer Integer
@@ -213,6 +212,31 @@ parseExpr =
       x <- try parseList <|> parseDottedList
       _ <- char ')'
       return x
+
+-- Pretty Printing
+showVal :: LispVal -> String
+showVal (String contents) = "\"" ++ contents ++ "\""
+showVal (Atom name) = name
+showVal (Number contents) = showSchemeNumber contents
+showVal (Bool True) = "#t"
+showVal (Bool False) = "#f"
+showVal (Character c) = "#\\" ++ [c]
+showVal (List contents) = "(" ++ unwords (map showVal contents) ++ ")"
+showVal (DottedList hd tl) = "(" ++ unwords (map showVal hd) ++ " . " ++ showVal tl ++ ")"
+showVal (Vector contents) = "#(" ++ unwords (map showVal contents) ++ ")"
+
+-- Pretty Printing for SchemeNumber
+showSchemeNumber :: SchemeNumber -> String
+showSchemeNumber (Integer n) = show n
+showSchemeNumber (Rational r) = show (numerator r) ++ "/" ++ show (denominator r)
+showSchemeNumber (Real d) = show d
+showSchemeNumber (Complex (r :+ i))
+  | i == 0 = show r
+  | r == 0 = show i ++ "i"
+  | i > 0 = show r ++ "+" ++ show i ++ "i"
+  | otherwise = show r ++ show i ++ "i"
+
+instance Show LispVal where show = showVal
 
 readExpr :: String -> String
 readExpr input =
