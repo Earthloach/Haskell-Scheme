@@ -1,5 +1,8 @@
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Parser where
 
+import Control.Monad.Except
 import Data.Complex (Complex (..))
 import Data.Ratio
 import Numeric
@@ -11,6 +14,7 @@ symbol = oneOf "$%&|*+-/:<=>?@^_~"
 spaces :: Parser ()
 spaces = skipMany1 space
 
+-- Scheme (Lisp) data types
 data LispVal
   = Atom String
   | List [LispVal]
@@ -27,6 +31,15 @@ data SchemeNumber
   | Real Double
   | Complex (Complex Double)
   deriving (Show)
+
+data LispError
+  = NumArgs Integer [LispVal]
+  | TypeMismatch String LispVal
+  | Parser ParseError
+  | BadSpecialForm String LispVal
+  | NotFunction String String
+  | UnboundVar String String
+  | Default String
 
 parseString :: Parser LispVal
 parseString = do
@@ -135,7 +148,6 @@ parseComplex = try parseRectangular <|> parseImaginary
       let imagValue = if sign == '-' then -imagPart else imagPart
       return $ Number $ Complex (0.0 :+ imagValue)
 
-
 parseCharacter :: Parser LispVal
 parseCharacter = do
   _ <- string "#\\"
@@ -167,8 +179,7 @@ parseVector = do
   _ <- char ')'
   return $ Vector elems
 
-
--- Quoted Lists parsers 
+-- Quoted Lists parsers
 parseQuoted :: Parser LispVal
 parseQuoted = do
   _ <- char '\''
@@ -193,7 +204,6 @@ parseUnQuoteSplicing = do
   _ <- char '@'
   x <- parseExpr
   return $ List [Atom "unquote-splicing", x]
-
 
 parseExpr :: Parser LispVal
 parseExpr =
@@ -237,8 +247,39 @@ showSchemeNumber (Complex (r :+ i))
 
 instance Show LispVal where show = showVal
 
-readExpr :: String -> LispVal
+showError :: LispError -> String
+showError (UnboundVar message varname) = message ++ ": " ++ varname
+showError (BadSpecialForm message form) = message ++ ": " ++ show form
+showError (NotFunction message func) = message ++ ": " ++ show func
+showError (NumArgs expected found) =
+  "Expected "
+    ++ show expected
+    ++ " args; found values "
+    ++ unwordsList found
+showError (TypeMismatch expected found) =
+  "Invalid type: expected "
+    ++ expected
+    ++ ", found "
+    ++ show found
+showError (Parser parseErr) = "Parse error at " ++ show parseErr
+showError (Default dafaultErr) = show dafaultErr
+
+unwordsList :: [LispVal] -> [Char]
+unwordsList = unwords . map showVal
+
+instance Show LispError where show = showError
+
+-- Curried custom type for error handling 
+type ThrowsError = Either LispError
+
+trapError :: (MonadError e m, Show e) => m String -> m String
+trapError action = catchError action (return . show)
+
+extractValue :: ThrowsError a -> a
+extractValue (Right val) = val
+
+readExpr :: String -> ThrowsError LispVal
 readExpr input =
   case parse parseExpr "lisp" input of
-    Left err -> String $ "No match: " ++ show err
-    Right val -> val
+    Left err -> throwError $ Parser err
+    Right val -> return val

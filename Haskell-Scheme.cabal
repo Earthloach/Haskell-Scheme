@@ -55,6 +55,7 @@ executable Haskell-Scheme
   -- other-extensions:
   -- Other library packages from which modules are imported.
   build-depends:
+    mtl ^>=2.3.1,
     base ^>=4.18.3.0,
     parsec ^>=3.1.14.0,
 
