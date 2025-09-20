@@ -7,39 +7,13 @@ import Data.Complex (Complex (..))
 import Data.Ratio
 import Numeric
 import Text.ParserCombinators.Parsec hiding (spaces)
+import Type
 
 symbol :: Parser Char
 symbol = oneOf "$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
-
--- Scheme (Lisp) data types
-data LispVal
-  = Atom String
-  | List [LispVal]
-  | DottedList [LispVal] LispVal
-  | Vector [LispVal]
-  | Number SchemeNumber
-  | Character Char
-  | String String
-  | Bool Bool
-
-data SchemeNumber
-  = Integer Integer
-  | Rational Rational
-  | Real Double
-  | Complex (Complex Double)
-  deriving (Show)
-
-data LispError
-  = NumArgs Integer [LispVal]
-  | TypeMismatch String LispVal
-  | Parser ParseError
-  | BadSpecialForm String LispVal
-  | NotFunction String String
-  | UnboundVar String String
-  | Default String
 
 parseString :: Parser LispVal
 parseString = do
@@ -64,14 +38,19 @@ parseAtom = do
   first <- letter <|> symbol
   rest <- many (letter <|> digit <|> symbol)
   let atom = first : rest
-  return $ case atom of
-    "#t" -> Bool True
-    "#f" -> Bool False
-    _ -> Atom atom
+  return $ Atom atom
+
+parseBool :: Parser LispVal
+parseBool = do
+  _ <- char '#'
+  (char 't' >> return (Bool True)) <|> (char 'f' >> return (Bool False))
 
 -- SchemeNumber parsers
 parseNumber :: Parser LispVal
-parseNumber = try parseComplex <|> try parseRational <|> try parseReal <|> parseInteger <|> parseRadix
+parseNumber = do
+  -- Parse the number only when it looks like a number
+  _ <- lookAhead (oneOf "#+-.0123456789")
+  try parseComplex <|> try parseRational <|> try parseReal <|> parseInteger <|> parseRadix
 
 parseInteger :: Parser LispVal
 parseInteger = do
@@ -211,6 +190,7 @@ parseExpr =
     <|> try parseCharacter
     <|> try parseString
     <|> try parseNumber
+    <|> try parseBool
     <|> parseAtom
     <|> parseQuoted
     <|> parseQuasiQuoted
@@ -221,62 +201,6 @@ parseExpr =
       x <- try parseList <|> parseDottedList
       _ <- char ')'
       return x
-
--- Pretty Printing
-showVal :: LispVal -> String
-showVal (String contents) = "\"" ++ contents ++ "\""
-showVal (Atom name) = name
-showVal (Number contents) = showSchemeNumber contents
-showVal (Bool True) = "#t"
-showVal (Bool False) = "#f"
-showVal (Character c) = "#\\" ++ [c]
-showVal (List contents) = "(" ++ unwords (map showVal contents) ++ ")"
-showVal (DottedList hd tl) = "(" ++ unwords (map showVal hd) ++ " . " ++ showVal tl ++ ")"
-showVal (Vector contents) = "#(" ++ unwords (map showVal contents) ++ ")"
-
--- Pretty Printing for SchemeNumber
-showSchemeNumber :: SchemeNumber -> String
-showSchemeNumber (Integer n) = show n
-showSchemeNumber (Rational r) = show (numerator r) ++ "/" ++ show (denominator r)
-showSchemeNumber (Real d) = show d
-showSchemeNumber (Complex (r :+ i))
-  | i == 0 = show r
-  | r == 0 = show i ++ "i"
-  | i > 0 = show r ++ "+" ++ show i ++ "i"
-  | otherwise = show r ++ show i ++ "i"
-
-instance Show LispVal where show = showVal
-
-showError :: LispError -> String
-showError (UnboundVar message varname) = message ++ ": " ++ varname
-showError (BadSpecialForm message form) = message ++ ": " ++ show form
-showError (NotFunction message func) = message ++ ": " ++ show func
-showError (NumArgs expected found) =
-  "Expected "
-    ++ show expected
-    ++ " args; found values "
-    ++ unwordsList found
-showError (TypeMismatch expected found) =
-  "Invalid type: expected "
-    ++ expected
-    ++ ", found "
-    ++ show found
-showError (Parser parseErr) = "Parse error at " ++ show parseErr
-showError (Default dafaultErr) = show dafaultErr
-
-unwordsList :: [LispVal] -> [Char]
-unwordsList = unwords . map showVal
-
-instance Show LispError where show = showError
-
--- Curried custom type for error handling 
-type ThrowsError = Either LispError
-
-trapError :: (MonadError e m, Show e) => m String -> m String
-trapError action = catchError action (return . show)
-
-extractValue :: ThrowsError a -> a
-extractValue (Right val) = val
 
 readExpr :: String -> ThrowsError LispVal
 readExpr input =

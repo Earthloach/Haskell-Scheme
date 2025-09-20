@@ -3,6 +3,7 @@ module Main where
 import Eval
 import Parser
 import System.Environment
+import Type
 
 main :: IO ()
 main = do
