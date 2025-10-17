@@ -53,7 +53,9 @@ equal listPair@[List _, List _] = eqvList equal listPair
 equal [DottedList xs x, DottedList ys y] = equal [List $ xs ++ [x], List $ ys ++ [y]]
 equal [arg1, arg2] =
   do
-    primitiveEquals <- or <$> mapM (unpackEquals arg1 arg2) [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+    primitiveEquals <- or <$> 
+      mapM (unpackEquals arg1 arg2) 
+      [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
     eqvEquals <- eqv [arg1, arg2]
     return $ Bool (primitiveEquals || case eqvEquals of Bool x -> x; _ -> False)
 equal badArgList = throwError $ NumArgs 2 badArgList
