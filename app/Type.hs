@@ -6,6 +6,7 @@ import Control.Monad.Except
 import Data.Complex (Complex (..))
 import Data.IORef
 import Data.Ratio
+import System.IO
 import Text.Parsec (ParseError)
 
 -- Scheme (Lisp) data types
@@ -20,6 +21,8 @@ data LispVal
   | Bool Bool
   | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
   | Func {params :: [String], vararg :: Maybe String, body :: [LispVal], closure :: Env}
+  | IOFunc ([LispVal] -> IOThrowsError LispVal)
+  | Port Handle
 
 data SchemeNumber
   = Integer Integer
@@ -61,6 +64,8 @@ showVal (Func {params = args, vararg = varargs, body = _, closure = _}) =
            Just arg -> " . " ++ arg
        )
     ++ ") ...)"
+showVal (IOFunc _) = "<IO primitive>"
+showVal (Port _) = "<IO port>"
 
 -- Pretty Printing for SchemeNumber
 showSchemeNumber :: SchemeNumber -> String

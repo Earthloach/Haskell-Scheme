@@ -3,8 +3,8 @@ module Repl where
 import Eval
 import Parser
 import State
-import Type
 import System.IO
+import Type
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -25,8 +25,11 @@ until_ pred' prompt action = do
     then return ()
     else action result >> until_ pred' prompt action
 
-runOne :: String -> IO ()
-runOne expr = primitiveBindings >>= flip evalAndPrint expr 
+runOne :: [String] -> IO ()
+runOne args = do
+  env <- primitiveBindings >>= flip bindVars [("args", List $ map String $ drop 1 args)]
+  runIOThrows (show <$> eval env (List [Atom "load", String (head args)]))
+    >>= hPutStrLn stderr
 
 runRepl :: IO ()
 runRepl = primitiveBindings >>= until_ (== "quit") (readPrompt "Lisp>>> ") . evalAndPrint
