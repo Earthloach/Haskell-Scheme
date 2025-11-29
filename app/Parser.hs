@@ -10,7 +10,7 @@ import Text.ParserCombinators.Parsec hiding (spaces)
 import Type
 
 symbol :: Parser Char
-symbol = oneOf "$%&|*+-/:<=>?@^_~"
+symbol = oneOf "$%&|*+-/:<=>?@^_~!"
 
 spaces :: Parser ()
 spaces = skipMany1 space

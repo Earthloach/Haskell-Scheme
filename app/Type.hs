@@ -1,8 +1,10 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+
 module Type where
 
 import Control.Monad.Except
 import Data.Complex (Complex (..))
+import Data.IORef
 import Data.Ratio
 import Text.Parsec (ParseError)
 
@@ -16,6 +18,8 @@ data LispVal
   | Character Char
   | String String
   | Bool Bool
+  | PrimitiveFunc ([LispVal] -> ThrowsError LispVal)
+  | Func {params :: [String], vararg :: Maybe String, body :: [LispVal], closure :: Env}
 
 data SchemeNumber
   = Integer Integer
@@ -33,6 +37,10 @@ data LispError
   | UnboundVar String String
   | Default String
 
+type Env = IORef [(String, IORef LispVal)]
+
+type IOThrowsError = ExceptT LispError IO
+
 -- Pretty Printing
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
@@ -44,6 +52,15 @@ showVal (Character c) = "#\\" ++ [c]
 showVal (List contents) = "(" ++ unwords (map showVal contents) ++ ")"
 showVal (DottedList hd tl) = "(" ++ unwords (map showVal hd) ++ " . " ++ showVal tl ++ ")"
 showVal (Vector contents) = "#(" ++ unwords (map showVal contents) ++ ")"
+showVal (PrimitiveFunc _) = "<primitive>"
+showVal (Func {params = args, vararg = varargs, body = _, closure = _}) =
+  "(lambda ("
+    ++ unwords (map show args)
+    ++ ( case varargs of
+           Nothing -> ""
+           Just arg -> " . " ++ arg
+       )
+    ++ ") ...)"
 
 -- Pretty Printing for SchemeNumber
 showSchemeNumber :: SchemeNumber -> String

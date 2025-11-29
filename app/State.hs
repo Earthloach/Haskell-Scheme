@@ -5,11 +5,7 @@ import Control.Monad.IO.Class
 import Data.Functor
 import Data.IORef
 import Data.Maybe (isJust)
-import Type (LispError (UnboundVar), LispVal, ThrowsError, extractValue, trapError)
-
-type Env = IORef [(String, IORef LispVal)]
-
-type IOThrowsError = ExceptT LispError IO
+import Type
 
 nullEnv :: IO Env
 nullEnv = newIORef []
